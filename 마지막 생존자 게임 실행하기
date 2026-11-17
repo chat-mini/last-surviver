@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>마지막 생존자</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101827;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;justify-content:center;min-height:100vh}
+main{width:min(100%,480px);padding:18px 14px 28px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+h1{font-size:25px;margin:3px 0}.eyebrow{font-size:11px;color:#9eacc0;letter-spacing:1.5px}
+.best{text-align:right;color:#aab7c9;font-size:12px}.best strong{display:block;color:white;font-size:21px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.stat{background:#1c2a3d;border:1px solid #34445a;border-radius:12px;padding:9px;text-align:center;color:#aab7c9;font-size:12px}
+.stat b{display:block;color:#fff;font-size:21px;margin-top:2px}
+.arena{position:relative;border:1px solid #40516a;border-radius:16px;overflow:hidden;background:#172438}
+canvas{display:block;width:100%;height:auto;touch-action:pan-y}
+.overlay{position:absolute;inset:0;background:#101827dd;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
+.overlay .emoji{font-size:44px}.overlay h2{font-size:27px;margin:10px 0 4px}.overlay p{color:#c1ccda;line-height:1.5;margin:5px 0 20px}
+button{border:0;border-radius:12px;padding:14px 18px;font-size:17px;font-weight:750;min-height:50px;background:#16a36a;color:white}
+.controls{display:flex;gap:12px;margin-top:12px}.controls button{flex:1;background:#24344a;border:1px solid #40516a}
+.hint{text-align:center;color:#9eacc0;font-size:12px;margin-top:12px}
+</style>
+</head>
+<body>
+<main>
+<header><div><div class="eyebrow">SURVIVAL ARCADE · PROTOTYPE 01</div><h1>마지막 생존자</h1></div><div class="best">최고 기록<strong id="best">0</strong></div></header>
+<section class="stats">
+<div class="stat">점수<b id="score">0</b></div><div class="stat">코인<b id="coins">0</b></div><div class="stat">속도<b id="speed">1.0x</b></div>
+</section>
+<div class="arena"><canvas id="game" width="360" height="480" aria-label="장애물을 피하는 게임"></canvas>
+<div class="overlay" id="overlay"><div class="emoji">🏃</div><h2 id="headline">살아남아라!</h2><p id="description">좌우로 움직여 빨간 장애물을 피하고<br>노란 코인을 모아라.</p><button id="start">게임 시작</button></div></div>
+<div class="controls"><button id="left">◀ 왼쪽</button><button id="right">오른쪽 ▶</button></div>
+<div class="hint">화면 좌우를 터치하거나 버튼을 누르세요 · PC는 방향키</div>
+</main>
+<script>
+(()=>{
+const $=id=>document.getElementById(id), canvas=$('game'),ctx=canvas.getContext('2d');
+let running=false, lane=1, obstacles=[],coins=[],score=0,collected=0,frame=0,speed=2.7,last=0,raf=0,best=Number(localStorage.getItem('lastSurvivorBest')||0);
+const lanes=[75,180,285];
+$('best').textContent=best;
+function hud(){$('score').textContent=score;$('coins').textContent=collected;$('speed').textContent=(1+score/500).toFixed(1)+'x';$('best').textContent=best}
+function draw(){
+ ctx.clearRect(0,0,360,480);ctx.fillStyle='#172438';ctx.fillRect(0,0,360,480);
+ ctx.strokeStyle='#34465c';ctx.lineWidth=2;ctx.setLineDash([16,15]);ctx.lineDashOffset=-(frame*speed*.7)%31;
+ ctx.beginPath();ctx.moveTo(127,0);ctx.lineTo(127,480);ctx.moveTo(233,0);ctx.lineTo(233,480);ctx.stroke();ctx.setLineDash([]);
+ for(let i=0;i<12;i++){let y=(i*48+frame*speed*1.4)%480;ctx.fillStyle='#26374c';ctx.fillRect(8,y,344,2)}
+ for(const o of obstacles){ctx.fillStyle='#e45c52';ctx.fillRect(lanes[o.lane]-24,o.y-23,48,46);ctx.fillStyle='#ffaaa0';ctx.fillRect(lanes[o.lane]-16,o.y-15,32,8)}
+ for(const c of coins){ctx.beginPath();ctx.arc(lanes[c.lane],c.y,10,0,Math.PI*2);ctx.fillStyle='#f6c94c';ctx.fill();ctx.strokeStyle='#fff0a4';ctx.lineWidth=3;ctx.stroke()}
+ ctx.font='30px sans-serif';ctx.textAlign='center';ctx.fillText('🏃',lanes[lane],425);ctx.fillStyle='#fff';ctx.font='12px sans-serif';ctx.fillText('SURVIVE',180,22);
+}
+function finish(){
+ running=false;cancelAnimationFrame(raf);best=Math.max(best,score);localStorage.setItem('lastSurvivorBest',best);hud();
+ $('overlay').style.display='flex';$('headline').textContent='게임 종료!';$('description').textContent=`${score}점 · 코인 ${collected}개를 모았어.`;$('start').textContent='다시 도전';
+}
+function move(d){if(running)lane=Math.max(0,Math.min(2,lane+d))}
+function tick(t){
+ if(!running)return;const dt=Math.min(2,(t-last)/16.67||1);last=t;frame+=dt;score+=Math.floor(dt);speed=2.7+Math.min(5,score/160);
+ if(frame%Math.max(24,Math.floor(66-score/15))<dt)obstacles.push({lane:Math.floor(Math.random()*3),y:-25});
+ if(frame%90<dt)coins.push({lane:Math.floor(Math.random()*3),y:-15});
+ for(const o of obstacles)o.y+=speed*dt;for(const c of coins)c.y+=speed*dt;
+ for(const o of obstacles)if(o.lane===lane&&o.y>385&&o.y<450){finish();return}
+ for(let i=coins.length-1;i>=0;i--){const c=coins[i];if(c.lane===lane&&c.y>385&&c.y<450){collected++;coins.splice(i,1)}else if(c.y>500)coins.splice(i,1)}
+ obstacles=obstacles.filter(o=>o.y<510);draw();if(Math.floor(frame)%12===0)hud();raf=requestAnimationFrame(tick);
+}
+function start(){cancelAnimationFrame(raf);score=0;collected=0;frame=0;speed=2.7;lane=1;obstacles=[];coins=[];running=true;$('overlay').style.display='none';hud();draw();last=performance.now();raf=requestAnimationFrame(tick)}
+$('start').addEventListener('click',start);$('left').addEventListener('click',()=>move(-1));$('right').addEventListener('click',()=>move(1));
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'){e.preventDefault();move(-1)}if(e.key==='ArrowRight'){e.preventDefault();move(1)}});
+canvas.addEventListener('pointerdown',e=>{if(!running)return;const r=canvas.getBoundingClientRect();move(e.clientX<r.left+r.width/2?-1:1)});
+hud();draw();
+})();
+</script>
+</body>
+</html>
